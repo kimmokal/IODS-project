@@ -1,5 +1,6 @@
 ---
 title: "IODS course project"
+author: "Kimmo Kallonen"
 output:
   html_document:
     theme: cosmo
@@ -27,4 +28,3 @@ output:
 ***
 
 (more chapters to be added similarly as we proceed with the course!)
-
