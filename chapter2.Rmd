@@ -1,13 +1,70 @@
-# Insert chapter 2 title here
+# Week 2: Regression and model validation
 
-*Describe the work you have done this week and summarize your learning.*
+A data set, which contains answers from a survey conducted among students on an introductory statistics course, was examined.
 
-- Describe your work and results clearly. 
-- Assume the reader has an introductory course level understanding of writing and reading R code as well as statistical methods.
-- Assume the reader has no previous knowledge of your data or the more advanced methods you are using.
+There are 183 subjects, and the number reduces to 166 after excluding those who didn't attend the final exam of the course. For each subject, there are 60 features, of which 56 are answers to survey questions. The other four are *gender*, *age*, *points* from the exam, and finally *attitude*, which is a summary variable from certain answers to the survey.
 
-```{r}
-date()
+The questions in the survey pertained to the students' attitude and approaches to learning. The three distinguish learning approaches were defined as surface level, deep level and strategic level. The 56 survey questions were condensed to these 3 variables (named *surf*, *deep*, *stra*), so in the end there are 7 features for each student.
+
+### Graphical overview of the data
+
+Let's see how the variables in the data look and compare to each other.
+```{r, echo=FALSE}
+Sys.setenv(`_R_S3_METHOD_REGISTRATION_NOTE_OVERWRITES_` = "false")
+library(ggplot2)
+library(GGally)
+learning2014 <- read.table("data/learning2014.txt", sep="\t", header=TRUE)
+p <- ggpairs(learning2014, lower = list(combo = wrap("facethist", bins = 20)))
 ```
 
-Here we go again...
+```{r, fig.width = 9, fig.height = 9, echo=FALSE}
+p
+```
+
+First note that genderwise two thirds of the students were female and one third male. Interestingly, while the males scored higher on attitude, both genders achieved very close to the same mean in the exam points. The majority of students are around 22 years old, but students of +50 years of age also participated in the course.
+
+As one would expect, attitude has a notable correlation with the scored exam points. In terms of the learning approaches, surface-level learning negatively correlates with the points, which makes sense. Likewise, strategic learning approach tends to lead to higher score. However one might have expected deep level learning to have higher correlation with the exam points. Surface level and deep level learning approaches are opposite to each other, so they have some negative correlation.
+
+### Regression model
+
+In order to fit a linear regression model to predict the exam points of a student, we need to choose explanatory variables from the available features. Looking at how the other features correlate with the points, natural choices for the explanatory variables would be *attitude*, *stra*, and *surf*, as they have the highest absolute values for the linear correlation. The first two have positive correlation with the points, while the last one has negative.
+
+Fitting the model gives us:
+```{r, echo=FALSE}
+model <- lm(points ~ attitude + stra + surf, data = learning2014)
+summary(model)
+```
+
+So we can predict the exam points with the equation
+\[points = 0.34 * attitude + 0.85 * stra - 0.58 * surf + 11.01,\]
+where the other coefficients except *attitude* have a relatively high uncertainty. The t values for the parameters suggests that they each have statistical significance, in the same relative order as the values for the linear correlation. Most notably *attitude* is very significant, while *surf* could arguably be left out of the model. While the coefficient of the *attitude* variable is lower than the coefficients for *stra* and *surf*, one must take a look back at the distributions of the variables. While *attitude* ranges from 0 to 50, the other two only range from 0 to 5, making *attitude* much more decisive for the prediction of the exam points.
+
+Let us however see what we get if *surf* is removed and the model is fitted only to *attitude* and *stra*.
+
+```{r, echo=FALSE}
+model <- lm(points ~ attitude + stra, data = learning2014)
+summary(model)
+```
+
+Now the equation is
+\[points = 0.35 * attitude + 0.91 * stra + 8.97.\]
+
+In order to compare these two models, consider the multiple R-squared values. It is a measure of how well the model fits the data. At a quick glance, the first model has higher multiple R-squared value of 0.2074, while the latter has 0.2048. However, it needs to be taken into account that the more variables a model has, the higher the R-squared value will be. So in fact we need to look at the adjusted R-squared value, which also considers the number of variables. The second model has higher adjusted R-squared value of 0.1951 compared to the value 0.1927 of the first model. While there isn't a huge difference, the second model may be slightly more accurate predictor.
+
+Next it is worth to evaluate the validity of the model. First recall three key assumptions:
+
+1. The model is a linear combination of the explanatory variables
+2. The errors of the model follow uncorrelated normal distributions
+3. The errors have constant variance, which implies that the error size is independent of the variable values
+
+It is possible to examine how well these assumptions hold with a few diagnostic plots:
+```{r, fig.width = 9, fig.height = 4, echo=FALSE}
+par(mfrow = c(1,3))
+plot(model, which=c(1,2,5))
+```
+
+The left plot shows the residuals versus the fitted values. If any sort of structure is seen in the scatter plot, then the errors would be correlated to the variable values. This is also related to the linearity of the model, as strong non-linear structures in the plot would indicate that the model should also be non-linear. There is no notable structure in this plot, which means that the assumptions 1. and 3. hold fine.
+
+The normal Q-Q plot in the middle shows whether the errors are normally distributed. Since the majority of the points in the plot follow the fitted line quite well, it can be concluded that the errors are can be approximated as normally distributed, and hence the assumption 2. also holds pretty good.
+
+Finally the plot on the right shows the residuals versus leverage. It displays how strong of an effect single data points have on the fit. There are no points in the plot with highly significant leverage, which implies that there are no notable outliers and most of the points lie quite well around the fitted model.
