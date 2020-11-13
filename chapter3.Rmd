@@ -1,0 +1,66 @@
+# Week 3: Logistic Regression
+
+The data set that is examined this week contains information about 382 Portuguese students at the secondary education level. This data set can be downloaded from [here](http://s3.amazonaws.com/assets.datacamp.com/production/course_2218/datasets/alc.txt) (which was wrangled from two data sets available [here](https://archive.ics.uci.edu/ml/datasets/Student+Performance)). For each student, there are 35 attributes:
+
+```{r, echo=FALSE}
+Sys.setenv(`_R_S3_METHOD_REGISTRATION_NOTE_OVERWRITES_` = "false")
+library(ggplot2)
+library(GGally)
+alc <- read.table("data/alc_data.csv", sep=",", header=TRUE)
+```
+
+```{r, echo=FALSE}
+colnames(alc)
+```
+
+The attributes contain information about the students' social background, demographics, activities, school performance level (combined from two subjects: Portuguese and Mathematics) and alcohol consumption. We are especially interested in how alcohol consumption relates to the other features. There are 114 out of the 382 students who are considered to have high alcohol consumption.
+
+Before digging in the data, consider a few variables, which could be related to the amount of alcohol consumption.
+
+* **Absences:** It is easy to conceive that there is likely to be a link between high alcohol consumption and being more absent from school.
+* **Study time:** Consuming a lot of alcohol also consumes time, which means that the amount of time spent on studying is likely to be lower for those with high alcohol consumption.
+* **Past class failures:** A history of high alcohol consumption should leave its mark on having failed classes in the past. On the other hand, if the studies are not going as planned, it might also lead a student to consume more alcohol.
+* **Family relations:** Alcohol is never good for any relationships in the long term (and bad relations can also lead to alcoholism), so I would suspect that the quality of family relations for those with high alcohol consumption is lower than average.
+
+To see whether there really is a relation between high alcohol consumption and the four variables I highlighted, it is best to have a look at the relevant plots.
+
+```{r, echo=FALSE}
+g1 <- ggplot(alc, aes(x = high_use, y = absences))
+g2 <- ggplot(alc, aes(x = high_use, y = studytime))
+g3 <- ggplot(alc, aes(x = failures, fill = high_use))
+g4 <- ggplot(alc, aes(x = high_use, y = famrel))
+```
+ 
+```{r, fig.width = 9, fig.height = 9, fig.show="hold", out.width="50%", echo=FALSE}
+g1 + geom_boxplot() + xlab("High alcohol consumption") + ylab("Absences") + theme(text = element_text(size=18))
+g2 + geom_boxplot() + xlab("High alcohol consumption") + ylab("Study time") + theme(text = element_text(size=18))
+```
+
+```{r, fig.width = 9, fig.height = 9, fig.show="hold", out.width="50%", echo=FALSE}
+g3 + geom_bar() + xlab("High alcohol consumption") + ylab("Past class failures") + theme(text = element_text(size=18))
+g4 + geom_boxplot() + xlab("High alcohol consumption") + ylab("Family relations") + theme(text = element_text(size=18))
+```
+
+These plots support the hypotheses I stated earlier. High alcohol consumption leads to higher number of absences and lower study time. There is also a relation between high alcohol consumption and past class failures. While less than one third of the total number of students are considered to have high alcohol consumption, they make up about half of the students with one or more past class failures. The family relations are also on average lower among those students. 
+
+### Regression model
+
+The relationship between these features and high alcohol consumption can be further examined with a logistic regression model, that tries to predict whether or not a student has high alcohol consumption based on the features.
+
+```{r, echo=FALSE}
+model <- glm(high_use ~ absences + studytime + failures + famrel, data = alc, family = "binomial")
+summary(model)
+```
+
+The coefficients of the model can be interpreted as odds ratios. Let's check these ratios and their confidence intervals.
+
+```{r, echo=FALSE}
+odds_ratios <- exp(coef(model))
+confidence_intervals <- exp(confint(model))
+cbind(odds_ratios, confidence_intervals)
+```
+
+If an odd ratio is larger than one, then this feature is more positively correlated with the positive outcome (i.e. high alcohol consumption in our case). On the other hand, odd ratio of less than one means that it has negative correlation with the positive outcome. The earlier hypothesis was that absences and past failures would be positively correlated with high alcohol consumption, and study time and family relations would be negatively correlated. These odd ratios indeed support this hypothesis. However, in the case of the family relations, the confidence interval does extend to above one, so it is less reliable predictor than the others.
+
+Unfortunately I didn't quite have enough time to further evaluate the predictive power of the model.
+
