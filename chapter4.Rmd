@@ -1,0 +1,167 @@
+# Week 4: Clustering and classification
+
+### Data exploration and linear discriminant analysis
+
+This week, the data set under scrutiny contains housing values in the suburbs of Boston in the late 1970s (more information about the data set can be found [here](https://stat.ethz.ch/R-manual/R-devel/library/MASS/html/Boston.html)). It is part of the MASS library in R. Let's have a look at its variables:
+
+```{r, echo=FALSE, message=FALSE}
+Sys.setenv(`_R_S3_METHOD_REGISTRATION_NOTE_OVERWRITES_` = "false")
+library(MASS)
+library(ggplot2)
+library(corrplot)
+library(tidyr)
+library(dplyr)
+library(plotly)
+```
+
+```{r, echo=FALSE}
+data("Boston")
+str(Boston)
+```
+
+The data set consists of 506 neighbourhoods in Boston and for each there are 14 explanatory variables, such as crime rate per capita and nitric oxides concentration. Let's then have a closer look at the variables and visualize them.
+
+```{r, echo=FALSE}
+cor_matrix<-cor(Boston) %>% round(2)
+summary(Boston)
+```
+```{r, fig.width = 9, fig.height = 8, echo=FALSE}
+
+pairs(Boston, lower.panel=NULL)
+corrplot(cor_matrix, method="circle", type="upper", tl.pos="d", tl.cex=0.9)
+```
+
+All of the variables are numerical. The *chas* variable is the only binary one, while the others have ranges of varying magnitudes. Some of the variable pairs are very strongly correlated, such as (*rad*, *tax*) and (*nox*, *dis*), while many pairs are relatively independent of each other.
+
+In order to be able to do proper linear discriminant analysis (LDA) later, all the variables need to be scaled. This is done for each variable by subtracting the mean and dividing by the standard deviation. Here is how the variables look after scaling:
+
+```{r, echo=FALSE}
+boston_scaled <- scale(Boston)
+summary(boston_scaled)
+```
+
+Now all the variables are of comparable magnitude. Next let's take the *crim* variable, which is the per capita crime rate, and turn it into a categorical variable *crime* using the quantiles as break points. The four categories of approximately equal size are named *low*, *med_low*, *med_high* and *high*:
+
+```{r, echo=FALSE}
+boston_scaled <- as.data.frame(boston_scaled)
+bins <- quantile(boston_scaled$crim)
+crime <- cut(boston_scaled$crim, breaks = bins, include.lowest = TRUE, labels = c("low", "med_low", "med_high", "high"))
+boston_scaled <- dplyr::select(boston_scaled, -crim)
+boston_scaled <- data.frame(boston_scaled, crime)
+```
+```{r, echo=FALSE}
+table(boston_scaled$crime)
+```
+Before we attempt to classify the data with LDA, the data is divided into train and test sets with 80/20 split:
+
+```{r, echo=FALSE}
+set.seed(42)
+n <- nrow(boston_scaled)
+ind <- sample(n,  size = n * 0.8)
+
+train <- boston_scaled[ind,]
+test <- boston_scaled[-ind,]
+```
+```{r, echo=FALSE}
+cat(paste0("Train set size: ", nrow(train), "\nTest set size: ", nrow(test)))
+```
+With the scaled training set, *crime* is used as a target variable for the LDA and all the other variables are predictor variables. 
+
+```{r, fig.width = 9, fig.height = 6, echo=FALSE}
+lda.fit <- lda(crime ~ ., data = train)
+
+lda.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+  heads <- coef(x)
+  arrows(x0 = 0, y0 = 0, 
+         x1 = myscale * heads[,choices[1]], 
+         y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+  text(myscale * heads[,choices], labels = row.names(heads), 
+       cex = tex, col=color, pos=3)
+}
+
+classes <- as.numeric(train$crime)
+
+plot(lda.fit, dimen = 2, col = classes, pch=classes)
+lda.arrows(lda.fit, myscale = 2.2)
+```
+
+Let's see how well our LDA model fares when evaluated on the test set:
+
+```{r}
+test_y <- test$crime
+test_x <- dplyr::select(test, -crime)
+
+lda.pred <- predict(lda.fit, newdata = test_x)
+table(correct = test_y, predicted = lda.pred$class)
+```
+
+The table shows that the neighbourhoods with the highest crime rates are identified very reliably, while the neighbourhoods with lower crime rates cannot be classified as successfully. Most notably, the LDA cannot distinguish medium low and medium high crime rate areas convincingly based on these explanatory features, and one neighbourhood with low crime rate was even classified as a medium high crime rate area.
+
+### k-means clustering
+
+Let's now for a moment forget about the LDA that was done and try to also cluster the original data by using the k-means clustering algorithm. The data is first scaled similary as earlier. Let's have a look at the summary of the Euclidian distances in the scaled data set:
+
+```{r, echo=FALSE}
+boston_kmeans_scaled <- scale(Boston)
+
+dist_eu <- dist(boston_kmeans_scaled, method = "euclidean")
+summary(dist_eu)
+```
+
+The minimum and maximum values indicate that some data points are indeed very close to each other when compared to the mean distance, but there's also considerable distances between other points. This signifies that the data set is not homogeneous and the data points form some sorts of clusters. The optimal number of clusters can be investigated by running the k-means algorithm for a range of *k* and calculating the Within-Cluster-Sum-of-Squares (WCSS) value for each *k*. The plot for WCSS as a function *k* is shown below.
+
+```{r, fig.width = 9, fig.height = 6, echo=FALSE}
+set.seed(42)
+
+k_max <- 8
+twcss <- sapply(1:k_max, function(k){kmeans(boston_kmeans_scaled, k)$tot.withinss})
+qplot(x = 1:k_max, y = twcss, geom = 'line', xlab = "k", ylab = "WCSS")
+```
+
+By design, the WCSS value decreases monotonously as *k* is increased. The optimal value for *k* can be found by considering the so-called elbow point, where there is a biggest drop in WCSS between two values. This implies that perhaps *k* = 2 is the optimal value, but *k* = 3 should work fine as well. After that, the slope becomes less steep at each point. The clusters can be visualized by looking at the variables and coloring the different groups. Here *k* = 3 was used:
+
+```{r, fig.width = 9, fig.height = 8, echo=FALSE}
+km <-kmeans(boston_kmeans_scaled, centers = 3)
+pairs(boston_kmeans_scaled, col=km$cluster, lower.panel=NULL)
+```
+
+The three categories certainly form their own clusters, though it is quite difficult to interpret how well it works because these plots are 2-dimensional, while the clusters exist in 14-dimensional space. Let us then combine LDA and the k-means clustering to see if LDA is capable of finding the clusters. All the 14 explanatory variables are used as predictors, while the thee cluster categories are used as a target.
+
+```{r, echo=FALSE}
+cluster_cat <- as.factor(km$cluster)
+boston_kmeans_scaled <- data.frame(boston_kmeans_scaled, cluster_cat)
+```
+
+```{r, fig.width = 9, fig.height = 6, echo=FALSE}
+lda2.fit <- lda(cluster_cat ~ ., data = boston_kmeans_scaled)
+
+lda2.arrows <- function(x, myscale = 1, arrow_heads = 0.1, color = "red", tex = 0.75, choices = c(1,2)){
+ heads <- coef(x)
+ arrows(x0 = 0, y0 = 0, 
+        x1 = myscale * heads[,choices[1]], 
+        y1 = myscale * heads[,choices[2]], col=color, length = arrow_heads)
+ text(myscale * heads[,choices], labels = row.names(heads), 
+      cex = tex, col=color, pos=3)
+}
+cluster_classes <- as.numeric(cluster_cat)
+plot(lda2.fit, dimen = 2, col = cluster_classes, pch=cluster_classes)
+lda2.arrows(lda2.fit, myscale = 4)
+```
+
+From this plot we can see that as was observed earlier, there is clearly one cluster of data points separate from the majority of the data points. The *rad* and *tax* variables are the most influential separators for the clusters. It was seen in the earlier LDA biplot as well that *rad* was important in separating the high crime rate neighbourhoods from the others. We can verify whether cluster 1 and the high crime rate areas are indeed the same clusters by comparing two 3D plots of the LDA, one labeled with the *crime* categories and another with the k-means clusters. (You can rotate the plots by dragging them!) 
+
+```{r, fig.width = 9, fig.height = 6, message=FALSE, echo=FALSE, comment=FALSE, warning=FALSE}
+model_predictors <- dplyr::select(train, -crime)
+
+matrix_product <- as.matrix(model_predictors) %*% lda.fit$scaling
+matrix_product <- as.data.frame(matrix_product)
+plot_ly(x = matrix_product$LD1, y = matrix_product$LD2, z = matrix_product$LD3, type= 'scatter3d', mode='markers', color=train$crime)
+```
+
+```{r, fig.width = 9, fig.height = 6, message=FALSE, echo=FALSE, warning=FALSE}
+train_kmeans <- boston_kmeans_scaled[ind,]
+
+plot_ly(x = matrix_product$LD1, y = matrix_product$LD2, z = matrix_product$LD3, type= 'scatter3d', mode='markers', color=train_kmeans$cluster_cat)
+```
+
+It appears that that cluster 1 practically corresponds to the high crime rate neighbourhoods. The k-means clustering algorithm also did reasonable job with identifying the low crime rate neighbourhoods (cluster 2) and the medium low crime rate neighbourhoods (cluster 3). Of course the k-means algorithm operated with one category less than the LDA, so they cannot have a one-to-one correspondence.
