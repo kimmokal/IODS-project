@@ -1,0 +1,87 @@
+# Week 5: Dimensionality reduction techniques
+
+### Principal component analysis (PCA)
+
+The data set that is analysed is a modified combination of two data sets containing information regarding Human Development Index and Gender Inequality Index of countries around the world, both originally obtained from here [here](http://hdr.undp.org/en/content/human-development-index-hdi). Each row in the data set is a country and there are eight selected features for each of them: 
+
+Variable | Description
+------|--------------
+GNI | Gross National Income per capita
+Life.Exp | Life expectancy at birth
+Edu.Exp | Expected years of schooling 
+Mat.Mor | Maternal mortality ratio
+Ado.Birth | Adolescent birth rate
+Parli.F | Percetange of female representatives in parliament
+Edu2.FM | Proportion of females divided by the proportion of males with at least secondary education
+Labo.FM | Proportion of females divided by the proportion of males in the labour force
+
+
+```{r, echo=FALSE, message=FALSE}
+Sys.setenv(`_R_S3_METHOD_REGISTRATION_NOTE_OVERWRITES_` = "false")
+library(ggplot2)
+library(GGally)
+library(corrplot)
+library(tidyr)
+library(dplyr)
+library(FactoMineR)
+```
+
+```{r, echo=FALSE}
+human <- read.table("data/human.csv", sep=",", header=TRUE)
+```
+
+A graphical overview and a summary of the variables are shown below.
+
+```{r, fig.width = 8, fig.height = 7, echo=FALSE}
+ggpairs(human)
+summary(human)
+```
+
+The variables in general don't follow any regular statistical distributions. There are some variables with significant (absolute) linear correlation values, such as maternal mortality ratio and life expectancy. One thing to note is that the *GNI* and *Mat.Mor* variables have much larger value ranges and variances than the other variables.
+
+To see if the eight features can be described in two dimensions in a meaningful manner, a principal component analysis (PCA) is performed. Let's first see how the PCA biplot looks when the variables are not scaled to comparative magnitudes with PCA1 on the x-axis and PCA2 on the y-axis: 
+
+```{r, fig.width = 8, fig.height = 7, echo=FALSE, warning=FALSE}
+pca_human <- prcomp(human)
+biplot(pca_human, choices = 1:2, cex=c(0.8,1), col=c("grey40", "deeppink2"))
+```
+
+This plot is not very useful, since PCA1 is dominated by the huge variance of *GNI* compared to the other variables. PCA can be improved when all the variables are scaled (which means subtracting by the mean and dividing by the standard deviation). This how the plot looks after rescaling: 
+
+```{r, fig.width = 8, fig.height = 7, echo=FALSE}
+human_std <- scale(human)
+pca_human_std <- prcomp(human_std)
+biplot(pca_human_std, choices = 1:2, cex=c(0.8,1), col=c("grey40", "deeppink2"))
+```
+
+Much better. With comparable variances for all the variables, the plot can be interpreted more easily. The angles between the arrows for each variable indicate the correlations between them. Small angles, close to zero degrees, indicate significant positive correlation and angles close to 180 degrees indicate significant negative correlation, while a right angle between two variables means that they're not correlated. We can clearly see three groups of closely related variables. The first group consists of *GNI*, *Edu.Exp*, *Life.Exp* and *Edu2.FM*, the second group consists of *Mat.Mor* and *Ado.Birth* and the third group has *Parli.F* and *Labo.FM*.
+
+The first and second groups are aligned with PCA1, which could be interpreted as an indicator of general quality of life, or rather lack of quality, since the first group is towards the negative values of PCA1. On the other hand, PCA2 represents gender equality to some extent. The countries towards the bottom of the biplot have low number of females in the parliament and workforce (i.e. females are more prone to be staying at home in such countries), while the countries towards the top have better gender equality.
+
+
+### Multiple correspondence analysis (MCA)
+
+In the second part, a data set containing answers to a questionnaire about tea consumption is examined with multiple correspondence analysis (MCA). The original data set contains 36 variables, so let's start by skimming it down to 8 and having a look at the variables.
+
+```{r, echo=FALSE}
+data(tea)
+```
+
+```{r, echo=FALSE, warning=FALSE}
+keep_columns <- c("Tea", "How", "how", "sugar", "where", "lunch", "dinner", "friends")
+tea_time <- select(tea, one_of(keep_columns))
+summary(tea_time)
+```
+
+```{r, fig.width = 7, fig.height = 6, echo=FALSE, warning=FALSE}
+gather(tea_time) %>% ggplot(aes(value)) + geom_bar() + theme(axis.text.x = element_text(angle = 45, hjust = 1, size = 8)) + facet_wrap("key", scales = "free") 
+```
+
+The chosen variables contain such information as what kind of tea is consumed, when it is consumed, and how it is consumed. With MCA, the similarity of these categorical variables can be compared and the results can be visualized with a biplot:
+
+```{r, fig.width = 8, fig.height = 7, echo=FALSE}
+mca <- MCA(tea_time, graph = FALSE)
+plot(mca, invisible=c("ind"), habillage = "quali")
+```
+
+While these two dimensions are not all that great in describing all the variation in the data, some rather clear observations can be made. For instance, unpackaged tea is mainly bought from tea shops, whereas practically all tea from chain stores comes in tea bags. Earl Gray tea is predominantly consumed with milk and sugar. Those who consume tea at dinner have a slight tendency towards higher quality teas such as unpackaged green tea, while the tea most consumed during lunch is apparently Earl Gray, and often enjoyed with friends (presumably colleagues at work).
