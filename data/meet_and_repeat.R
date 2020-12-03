@@ -20,7 +20,7 @@ bprs$treatment <- factor(bprs$treatment)
 bprs$subject <- factor(bprs$subject)
 
 rats$ID <- factor(rats$ID)
-rats$Group <- factor(rats$ID)
+rats$Group <- factor(rats$Group)
 
 # Convert the data sets to long form
 bprsl <- bprs %>% gather(key = weeks, value = bprs, -treatment, -subject)
